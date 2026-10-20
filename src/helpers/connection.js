@@ -347,7 +347,10 @@ class Connection {
     Object.keys(this.metadata).forEach((key) => {
       attributes.push({ label: humanize(key), value: this.metadata[key] });
     });
-    return attributes;
+    // graphs written without event annotations leave it empty
+    return attributes.filter(
+      (d) => !(d.label === "annotation" && (d.value == null || d.value === "")),
+    );
   }
 
   toString() {

@@ -9,13 +9,15 @@ import {
   isMissingDataError,
   isMissingDataResponse,
 } from "../../helpers/dataAvailability";
+import { resolveGraphPath } from "../../helpers/graphsPath";
 
 function* fetchData(action) {
   const currentState = yield select(getCurrentState);
   const { dataset, chromoBins } = currentState.Settings;
   const { id } = currentState.CaseReport;
-  const filePath = `${dataset.dataPath}${id}/allelic.json`;
+  let filePath = `${dataset.dataPath}${id}/allelic.json`;
   try {
+    filePath = yield call(resolveGraphPath, dataset, id, "allelic.json");
     const availabilityResponse = yield call(axios.head, filePath, {
       cancelToken: getCancelToken(),
     });
@@ -44,7 +46,7 @@ function* fetchData(action) {
   } catch (error) {
     if (axios.isCancel(error)) {
       console.log(
-        `fetch ${dataset.dataPath}${id}/allelic.json request canceled`,
+        `fetch ${filePath} request canceled`,
         error.message
       );
     } else if (isMissingDataError(error)) {

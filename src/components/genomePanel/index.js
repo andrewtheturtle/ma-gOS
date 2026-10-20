@@ -13,6 +13,7 @@ import {
   Typography,
   Progress,
   Skeleton,
+  Segmented,
 } from "antd";
 import { GiDna2 } from "react-icons/gi";
 import { AiOutlineDownload } from "react-icons/ai";
@@ -25,7 +26,7 @@ import {
 import * as htmlToImage from "html-to-image";
 import ErrorPanel from "../errorPanel";
 import Wrapper from "./index.style";
-import GenomePlot from "../genomePlot";
+import GenomePlot, { HAPLOTYPE_COLORS } from "../genomePlot";
 import HoverLine from "../hoverLine";
 
 const { Text } = Typography;
@@ -62,6 +63,8 @@ class GenomePanel extends Component {
 
     // Check data changes
     if (nextProps.genome !== this.props.genome) return true;
+    if (nextProps.colorBy !== this.props.colorBy) return true;
+    if (nextProps.showCopy !== this.props.showCopy) return true;
 
     // Check visibility/loading state
     if (
@@ -147,8 +150,16 @@ class GenomePanel extends Component {
       chromoBins,
       domains,
       commonRangeY,
+      colorBy,
+      onColorByChange,
+      showCopy,
+      onShowCopyChange,
     } = this.props;
     if (!visible) return null;
+    // allele / haplotype coloring switch, for allelic graphs whose nodes carry the LP haplotype
+    const showColorBy =
+      onColorByChange &&
+      genome?.intervals?.some((d) => d.metadata?.Haplotype);
     const { parentWidth, height } = this.state;
     let { gap } = margins;
 
@@ -203,6 +214,53 @@ class GenomePanel extends Component {
                 {zoomedByCmd && (
                   <Text type="secondary">{t("components.zoom-help")}</Text>
                 )}
+                {showColorBy && (
+                  <Segmented
+                    size="small"
+                    value={colorBy || "allele"}
+                    onChange={onColorByChange}
+                    options={[
+                      {
+                        value: "allele",
+                        label: (
+                          <span>
+                            <span style={{ color: "#FF0000" }}>●</span> major{" "}
+                            <span style={{ color: "#0000FF" }}>●</span> minor
+                          </span>
+                        ),
+                      },
+                      {
+                        value: "haplotype",
+                        label: (
+                          <span>
+                            <span style={{ color: HAPLOTYPE_COLORS.h1.slice(0, 7) }}>●</span> h1{" "}
+                            <span style={{ color: HAPLOTYPE_COLORS.h2.slice(0, 7) }}>●</span> h2
+                          </span>
+                        ),
+                      },
+                    ]}
+                  />
+                )}
+                {showColorBy && onShowCopyChange && (
+                  <Segmented
+                    size="small"
+                    value={showCopy || "both"}
+                    onChange={onShowCopyChange}
+                    options={
+                      colorBy === "haplotype"
+                        ? [
+                            { value: "both", label: "h1 + h2" },
+                            { value: "h1", label: "h1" },
+                            { value: "h2", label: "h2" },
+                          ]
+                        : [
+                            { value: "both", label: "major + minor" },
+                            { value: "major", label: "major" },
+                            { value: "minor", label: "minor" },
+                          ]
+                    }
+                  />
+                )}
                 <Tooltip title={t("components.download-as-png-tooltip")}>
                   <Button
                     type="default"
@@ -249,6 +307,8 @@ class GenomePanel extends Component {
                             genome,
                             yAxisTitle,
                             commonRangeY,
+                            colorBy,
+                            showCopy,
                           }}
                         />
                         <HoverLine

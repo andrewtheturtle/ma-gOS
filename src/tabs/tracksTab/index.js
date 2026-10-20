@@ -18,6 +18,7 @@ class TracksTab extends Component {
       genes,
       igv,
       allelic,
+      fixedAllelic,
       updateSelectedFilteredEvent,
     } = this.props;
 
@@ -36,6 +37,7 @@ class TracksTab extends Component {
             igv,
             chromoBins,
             allelic,
+            fixedAllelic,
             modalTitle: "",
             genomePlotTitle: t("components.tracks-modal.genome-plot"),
             genomePlotYAxisTitle: t(
@@ -77,6 +79,7 @@ class TracksTab extends Component {
             allelicPlotYAxisTitle: t(
               "components.tracks-modal.allelic-plot-y-axis-title"
             ),
+            fixedAllelicPlotTitle: t("components.tracks-modal.fixed-allelic-plot"),
             handleOkClicked: () => updateSelectedFilteredEvent(null),
             handleCancelClicked: () => updateSelectedFilteredEvent(null),
             open: true,
@@ -95,6 +98,7 @@ const mapStateToProps = (state) => ({
   genome: state.Genome,
   mutations: state.Mutations,
   allelic: state.Allelic,
+  fixedAllelic: state.FixedAllelic,
   chromoBins: state.Settings.chromoBins,
   genomeCoverage: state.GenomeCoverage,
   methylationBetaCoverage: state.MethylationBetaCoverage,

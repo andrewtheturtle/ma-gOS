@@ -35,6 +35,32 @@ const Wrapper = styled.div`
     margin: 24px;
   }
 
+  .cardinality-tooltip {
+    pointer-events: none;
+    z-index: 10;
+    max-width: 280px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .cardinality-tooltip-location {
+    font-family: monospace;
+    font-size: 11px;
+    word-break: break-all;
+    color: #595959;
+  }
+  .cardinality-tooltip-warning {
+    color: #cf1322;
+    font-size: 11px;
+  }
+  .cardinality-tooltip-hint {
+    color: #8c8c8c;
+    font-size: 11px;
+  }
   .filters-box .ant-form-item {
     margin-bottom: 10px;
   }

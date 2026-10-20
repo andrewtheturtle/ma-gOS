@@ -14,6 +14,7 @@ import MethylationIntensityCoverage from "./methylationIntensityCoverage/reducer
 import Hetsnps from "./hetsnps/reducer";
 import Mutations from "./mutations/reducer";
 import Allelic from "./allelic/reducer";
+import FixedAllelic from "./fixedAllelic/reducer";
 import SignatureStatistics from "./signatureStatistics/reducer";
 import SignatureProfiles from "./signatureProfiles/reducer";
 import Biomarkers from "./biomarkers/reducer";
@@ -42,6 +43,7 @@ export default {
   Hetsnps,
   Mutations,
   Allelic,
+  FixedAllelic,
   SignatureStatistics,
   SignatureProfiles,
   Biomarkers,

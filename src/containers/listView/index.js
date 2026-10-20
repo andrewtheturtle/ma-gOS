@@ -43,6 +43,7 @@ import ContainerDimensions from "react-container-dimensions";
 import InterpretationsAvatar from "../../components/interpretationsAvatar";
 import AggregationsPanel from "./aggregationsPanel";
 import CohortsPanel from "./cohortsPanel";
+import CardinalityPanel from "./cardinalityPanel";
 import HistogramPlot from "../../components/histogramPlot";
 import ParallelCoordinatesPanel from "../../components/parallelCoordinatesPanel";
 import SavedQueryButton from "../../components/savedQueryButton";
@@ -1459,6 +1460,15 @@ export class ListView extends Component {
                         />
                       ),
                     },
+                    ...(dataset?.cardinalityPath
+                      ? [
+                          {
+                            key: "cardinality",
+                            label: t("containers.list-view.tabs.cardinality"),
+                            children: <CardinalityPanel dataset={dataset} />,
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </Col>

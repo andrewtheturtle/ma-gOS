@@ -25,6 +25,12 @@ const margins = {
   yTicksCount: 10,
 };
 
+export const HAPLOTYPE_COLORS = {
+  h1: "#1f77b480",
+  h2: "#ff7f0e80",
+  unphased: "#80808080",
+};
+
 class GenomePlot extends Component {
   constructor(props) {
     super(props);
@@ -66,7 +72,15 @@ class GenomePlot extends Component {
       genome,
       commonRangeY,
     } = this.props;
-    const { intervals, frameConnections } = genome;
+    // allelic graphs can show one haplotype / allele copy: edges need one end on a shown copy, and
+    // edges crossing to the hidden copy are drawn dashed (see crossesHiddenCopy)
+    const shown = this.isCopyShown;
+    const intervals = genome.intervals.filter(shown);
+    const frameConnections = genome.frameConnections.filter(
+      (e) =>
+        (e.source && shown(e.source.interval)) ||
+        (e.sink && shown(e.sink.interval)),
+    );
     let stageWidth = width - 2 * margins.gapX;
     let stageHeight = height - 3 * margins.gap;
     let panelWidth =
@@ -248,6 +262,29 @@ class GenomePlot extends Component {
     });
   }
 
+  // showCopy: "both", "h1" / "h2" (node Haplotype) or "major" / "minor" (node Allele); nodes without
+  // that field and unphased (merged) nodes are always shown
+  isCopyShown = (d) => {
+    const { showCopy } = this.props;
+    if (!showCopy || showCopy === "both" || !d) return true;
+    const value =
+      d.metadata?.[showCopy === "h1" || showCopy === "h2" ? "Haplotype" : "Allele"];
+    if (!value || value === "unphased" || value === "NA") return true;
+    return value === showCopy;
+  };
+
+  crossesHiddenCopy = (d) =>
+    (d.source && !this.isCopyShown(d.source.interval)) ||
+    (d.sink && !this.isCopyShown(d.sink.interval));
+
+  // allelic graphs: color nodes by the LP's haplotype assignment instead of major / minor
+  intervalFill = (d) => {
+    if (this.props.colorBy === "haplotype") {
+      return HAPLOTYPE_COLORS[d.metadata?.Haplotype] || HAPLOTYPE_COLORS.unphased;
+    }
+    return d.fill || d.color;
+  };
+
   shouldComponentUpdate(nextProps, nextState) {
     const genomeChanged =
       nextProps.genome.toString() !== this.props.genome.toString();
@@ -262,6 +299,8 @@ class GenomePlot extends Component {
       nextProps.commonYScale !== this.props.commonYScale;
     const commonRangeYChanged =
       nextProps.commonRangeY !== this.props.commonRangeY;
+    const colorByChanged = nextProps.colorBy !== this.props.colorBy;
+    const showCopyChanged = nextProps.showCopy !== this.props.showCopy;
 
     return (
       genomeChanged ||
@@ -271,7 +310,9 @@ class GenomePlot extends Component {
       widthChanged ||
       heightChanged ||
       commonYScaleChanged ||
-      commonRangeYChanged
+      commonRangeYChanged ||
+      colorByChanged ||
+      showCopyChanged
     );
   }
 
@@ -581,6 +622,30 @@ class GenomePlot extends Component {
                 strokeWidth="10"
               />
             </pattern>
+            <pattern
+              id={`diagonalHatchHaplotype-${randID}`}
+              patternUnits="userSpaceOnUse"
+              width="20"
+              height="20"
+              patternTransform="rotate(45)"
+            >
+              <line
+                x1="5"
+                y="0"
+                x2="5"
+                y2="20"
+                stroke="#8FBBDA"
+                strokeWidth="10"
+              />
+              <line
+                x1="15"
+                y="0"
+                x2="15"
+                y2="20"
+                stroke="#FFBF87"
+                strokeWidth="10"
+              />
+            </pattern>
           </defs>
           <text
             className="y-axis-title"
@@ -658,9 +723,12 @@ class GenomePlot extends Component {
                       )}
                       height={margins.bar}
                       style={{
-                        fill: d.overlapping
-                          ? `url(#diagonalHatch-${randID})`
-                          : d.fill || d.color,
+                        // with one copy shown, balanced nodes no longer overlap their partner
+                        fill: d.overlapping && (this.props.showCopy || "both") === "both"
+                          ? this.props.colorBy === "haplotype"
+                            ? `url(#diagonalHatchHaplotype-${randID})`
+                            : `url(#diagonalHatch-${randID})`
+                          : this.intervalFill(d),
                         stroke: d.stroke,
                         strokeWidth: 1,
                       }}
@@ -692,8 +760,8 @@ class GenomePlot extends Component {
                     fill: d.fill,
                     stroke: d.color,
                     strokeWidth: d.strokeWidth,
-                    strokeDasharray: d.dash,
-                    opacity: d.opacity,
+                    strokeDasharray: this.crossesHiddenCopy(d) ? "6 4" : d.dash,
+                    opacity: this.crossesHiddenCopy(d) ? 0.5 : d.opacity,
                     pointerEvents: "all",
                   }}
                 />

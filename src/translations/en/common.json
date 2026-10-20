@@ -274,7 +274,8 @@
         "cases": "Case Reports",
         "aggregations": "Aggregations",
         "cohorts": "Population Stats",
-        "parallel-coordinates": "Parallel Coordinates"
+        "parallel-coordinates": "Parallel Coordinates",
+        "cardinality": "Cardinality"
       },
       "aggregations": {
         "title": "Cohort Level Aggregations",
@@ -888,6 +889,7 @@
       "mutations-plot-y-axis-title": "↑ Est. Copies",
       "igv-plot": "IGV Browser",
       "allelic-plot": "Allelic CN Graph",
+      "fixed-allelic-plot": "Partially Phased Allelic CN Graph (fix.phase)",
       "allelic-plot-y-axis-title": "↑ CN",
       "coverage-copy-number": "Est. CN ↑",
       "coverage-y-axis-title": "Est. CN ↑",

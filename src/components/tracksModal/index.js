@@ -33,6 +33,16 @@ import { downloadCanvasAsPng, dataRanges } from "../../helpers/utility";
 import Wrapper from "./index.style";
 
 const { Option } = Select;
+const ALLELIC_COLOR_BY_KEY = "gos.allelicColorBy";
+const readAllelicColorBy = () => {
+  try {
+    return window.localStorage.getItem(ALLELIC_COLOR_BY_KEY) === "haplotype"
+      ? "haplotype"
+      : "allele";
+  } catch (error) {
+    return "allele";
+  }
+};
 const { Text } = Typography;
 const { updateHoveredLocation } = settingsActions;
 
@@ -45,6 +55,18 @@ export class TracksModal extends Component {
     yVariable: null,
     colorVariable: null,
     contentReady: false,
+    allelicColorBy: readAllelicColorBy(),
+    allelicShowCopy: "both",
+  };
+
+  // the copy filter follows the coloring (h1 / h2 or major / minor), so a mode switch resets it
+  handleAllelicColorByChange = (allelicColorBy) => {
+    this.setState({ allelicColorBy, allelicShowCopy: "both" });
+    try {
+      window.localStorage.setItem(ALLELIC_COLOR_BY_KEY, allelicColorBy);
+    } catch (error) {
+      // the toggle still works for this view without storage
+    }
   };
 
   shouldComponentUpdate(nextProps, nextState) {
@@ -69,7 +91,8 @@ export class TracksModal extends Component {
       nextProps.genome?.loading !== this.props.genome?.loading ||
       nextProps.genomeCoverage?.loading !== this.props.genomeCoverage?.loading ||
       nextProps.mutations?.loading !== this.props.mutations?.loading ||
-      nextProps.allelic?.loading !== this.props.allelic?.loading
+      nextProps.allelic?.loading !== this.props.allelic?.loading ||
+      nextProps.fixedAllelic?.loading !== this.props.fixedAllelic?.loading
     )
       return true;
 
@@ -84,6 +107,7 @@ export class TracksModal extends Component {
       nextProps.hetsnps?.missing !== this.props.hetsnps?.missing ||
       nextProps.mutations?.missing !== this.props.mutations?.missing ||
       nextProps.allelic?.missing !== this.props.allelic?.missing ||
+      nextProps.fixedAllelic?.missing !== this.props.fixedAllelic?.missing ||
       nextProps.igv?.missing !== this.props.igv?.missing
     )
       return true;
@@ -94,6 +118,7 @@ export class TracksModal extends Component {
       nextProps.genomeCoverage?.dataPointsX !== this.props.genomeCoverage?.dataPointsX ||
       nextProps.mutations?.data !== this.props.mutations?.data ||
       nextProps.allelic?.data !== this.props.allelic?.data ||
+      nextProps.fixedAllelic?.data !== this.props.fixedAllelic?.data ||
       nextProps.genes?.list !== this.props.genes?.list ||
       nextProps.genes?.loading !== this.props.genes?.loading
     )
@@ -179,6 +204,7 @@ export class TracksModal extends Component {
       metadata,
       genes,
       allelic,
+      fixedAllelic,
       igv,
       chromoBins,
       modalTitle,
@@ -192,6 +218,7 @@ export class TracksModal extends Component {
       hetsnpPlotYAxis2Title,
       allelicPlotTitle,
       allelicPlotYAxisTitle,
+      fixedAllelicPlotTitle,
       handleOkClicked,
       handleCancelClicked,
       showVariants,
@@ -553,6 +580,29 @@ export class TracksModal extends Component {
             />
           </Col>
         )}
+        {fixedAllelic && !fixedAllelic.missing && (
+          <Col className="gutter-row" span={24}>
+            <GenomePanel
+              {...{
+                loading: fixedAllelic.loading,
+                genome: fixedAllelic.data,
+                error: fixedAllelic.error,
+                filename: fixedAllelic.filename,
+                title: fixedAllelicPlotTitle,
+                yAxisTitle: allelicPlotYAxisTitle,
+                colorBy: this.state.allelicColorBy,
+                onColorByChange: this.handleAllelicColorByChange,
+                showCopy: this.state.allelicShowCopy,
+                onShowCopyChange: (allelicShowCopy) => this.setState({ allelicShowCopy }),
+                chromoBins,
+                visible: true,
+                index: 0,
+                height,
+                commonRangeY,
+              }}
+            />
+          </Col>
+        )}
         {allelic && !allelic.missing && (
           <Col className="gutter-row" span={24}>
             <GenomePanel
@@ -563,6 +613,10 @@ export class TracksModal extends Component {
                 filename: allelic.filename,
                 title: allelicPlotTitle,
                 yAxisTitle: allelicPlotYAxisTitle,
+                colorBy: this.state.allelicColorBy,
+                onColorByChange: this.handleAllelicColorByChange,
+                showCopy: this.state.allelicShowCopy,
+                onShowCopyChange: (allelicShowCopy) => this.setState({ allelicShowCopy }),
                 chromoBins,
                 visible: true,
                 index: 0,

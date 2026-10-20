@@ -9,6 +9,7 @@ import {
   isMissingDataError,
   isMissingDataResponse,
 } from "../../helpers/dataAvailability";
+import { resolveGraphPath } from "../../helpers/graphsPath";
 
 function* fetchArrowData(plot) {
   yield loadArrowTable(plot.path, getCancelToken())
@@ -24,7 +25,7 @@ function* fetchData(action) {
     const currentState = yield select(getCurrentState);
     const { dataset } = currentState.Settings;
     const { id, metadata } = currentState.CaseReport;
-    const filePath = `${dataset.dataPath}${id}/hetsnps.arrow`;
+    const filePath = yield call(resolveGraphPath, dataset, id, "hetsnps.arrow");
 
     const availabilityResponse = yield call(axios.head, filePath, {
       cancelToken: getCancelToken(),

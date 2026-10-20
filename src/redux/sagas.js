@@ -15,6 +15,7 @@ import MethylationIntensityCoverageSagas from "./methylationIntensityCoverage/sa
 import HetsnpsSagas from "./hetsnps/saga";
 import MutationsSagas from "./mutations/saga";
 import AllelicSagas from "./allelic/saga";
+import FixedAllelicSagas from "./fixedAllelic/saga";
 import signatureStatisticsSagas from "./signatureStatistics/saga";
 import signatureProfilesSagas from "./signatureProfiles/saga";
 import biomarkersSagas from "./biomarkers/saga";
@@ -44,6 +45,7 @@ export default function* rootSaga(getState) {
     HetsnpsSagas(),
     MutationsSagas(),
     AllelicSagas(),
+    FixedAllelicSagas(),
     signatureStatisticsSagas(),
     signatureProfilesSagas(),
     biomarkersSagas(),

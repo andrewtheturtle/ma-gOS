@@ -3,6 +3,7 @@ import axios from "axios";
 import actions from "./actions";
 import { getCurrentState } from "./selectors";
 import allelicActions from "../allelic/actions";
+import fixedAllelicActions from "../fixedAllelic/actions";
 import filteredEventsActions from "../filteredEvents/actions";
 import genomeActions from "../genome/actions";
 import genomeCoverageActions from "../genomeCoverage/actions";
@@ -87,6 +88,7 @@ function* followUpFetchCaseReportSuccess(action) {
 
   const actionTypes = [
     allelicActions.FETCH_ALLELIC_DATA_REQUEST,
+    fixedAllelicActions.FETCH_FIXED_ALLELIC_DATA_REQUEST,
     filteredEventsActions.FETCH_FILTERED_EVENTS_REQUEST,
     genomeActions.FETCH_GENOME_DATA_REQUEST,
     genomeCoverageActions.FETCH_COVERAGE_DATA_REQUEST,
