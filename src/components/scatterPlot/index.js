@@ -78,7 +78,8 @@ class ScatterPlot extends Component {
         antialias: true,
         depth: true,
         stencil: false,
-        preserveDrawingBuffer: false,
+        // keep the last frame so "Download as PNG" (html-to-image) can copy the canvas
+        preserveDrawingBuffer: true,
       },
     });
 
