@@ -14,6 +14,24 @@ test("parses regions", () => {
   ]);
 });
 
+test("treats ; as a chromosome separator, with | , and strand suffixes", () => {
+  expect(parseRegions("6:1-2;7:5-6;8:1-9")).toEqual([
+    { chr: "6", start: 1, end: 2 },
+    { chr: "7", start: 5, end: 6 },
+    { chr: "8", start: 1, end: 9 },
+  ]);
+  expect(parseRegions("1:1-2+,1:5-6-;chr2:3-4|X:7-8")).toEqual([
+    { chr: "1", start: 1, end: 2 },
+    { chr: "1", start: 5, end: 6 },
+    { chr: "2", start: 3, end: 4 },
+    { chr: "X", start: 7, end: 8 },
+  ]);
+  const multi = [{ pair: "M", event: "chromothripsis", ev_id: 1, footprint: "6:1-2;7:5-6;8:1-9" },
+    { pair: "M", event: "chromothripsis", ev_id: 2, footprint: "1:1000-2000" }];
+  expect(eventsInView(multi, "M", "8:3-4").map((r) => r.ev_id)).toEqual([1]);
+  expect(eventsInView(multi, "M", "7:5-5|1:1500-1600").map((r) => r.ev_id)).toEqual([1, 2]);
+});
+
 test("picks the event in view, else every chromothripsis event of the pair", () => {
   expect(eventsInView(rows, "A", "1:150-160").map((r) => r.ev_id)).toEqual([1]);
   expect(eventsInView(rows, "A", "9:2-3").map((r) => r.ev_id)).toEqual([3]);

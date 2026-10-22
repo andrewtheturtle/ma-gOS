@@ -16,8 +16,8 @@ export const fetchCardinalityData = (path) => {
   return dataCache[path];
 };
 
-// "19:100-200|9:5-6" or "11:1-2+,11:3-4+" -> [{ chr, start, end }]
-const REGION = /([^:,|\s]+):(\d+)-(\d+)/g;
+// "19:100-200|9:5-6", "6:1-2;7:5-6" (footprints use ; between chromosomes) or "11:1-2+,11:3-4+" -> [{ chr, start, end }]
+const REGION = /([^:,|;\s]+):(\d+)-(\d+)/g;
 export const parseRegions = (text) =>
   [...(text || "").matchAll(REGION)].map((m) => ({
     chr: m[1].replace(/^chr/, ""),

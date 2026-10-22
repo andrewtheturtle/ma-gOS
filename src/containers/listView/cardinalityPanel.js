@@ -500,6 +500,12 @@ class CardinalityPanel extends Component {
             <Text type="secondary">
               {shown} of {scope.length} events shown
             </Text>
+            {this.state.cnFilter &&
+              this.state.cnMin != null &&
+              this.state.cnMax != null &&
+              this.state.cnMin > this.state.cnMax && (
+                <Text type="danger">min is above max, no events can match</Text>
+              )}
           </Space>
           {(isAll || isCn) && (
             <Space size="middle">

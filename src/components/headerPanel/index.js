@@ -102,9 +102,11 @@ export class HeaderPanel extends Component {
     const location = domains?.length && chromoBins ? domainsToLocation(chromoBins, domains) : "";
     const events = eventsInView(cardinalityRows, metadata.pair, location);
     if (!events.length) return null;
-    return events
+    const shown = events
+      .slice(0, 3)
       .map((row) => (events.length > 1 ? `${row.event} #${row.ev_id}: ` : "") + formatChao(row))
       .join("; ");
+    return events.length > 3 ? `${shown}; +${events.length - 3} more` : shown;
   };
 
   handleCbioportalModalOpen = () => {
