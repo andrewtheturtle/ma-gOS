@@ -1,11 +1,11 @@
 import React, { Component } from "react";
 import { withTranslation } from "react-i18next";
 import { connect } from "react-redux";
-import axios from "axios";
 import * as d3 from "d3";
 import ContainerDimensions from "react-container-dimensions";
-import { Card, Checkbox, Empty, Radio, Select, Space, Spin, Typography } from "antd";
+import { Card, Checkbox, Empty, InputNumber, Radio, Select, Space, Spin, Switch, Typography } from "antd";
 import { buildCaseReportUrl } from "../../helpers/browseScope";
+import { fetchCardinalityData } from "../../helpers/cardinality";
 
 const { Text } = Typography;
 
@@ -25,6 +25,7 @@ const EVENT_ORDER = [
 const stripGroup = (event) =>
   ["qrppos", "qrpmin", "qrpmix"].includes(event) ? "rec dup" : event;
 const ALL_EVENTS = "__all__";
+const MEAN_CN_VIEW = "__meancn__";    // Chao vs mean copy number, all three phasings
 const MARGIN = { top: 24, right: 24, bottom: 56, left: 72 };
 const PLOT_HEIGHT = 520;
 
@@ -49,6 +50,10 @@ class CardinalityPanel extends Component {
     yKey: "chao_fixed",
     hovered: null,
     hidePlaceholder: false,
+    cnEvent: ALL_EVENTS,    // event shown in the Chao vs mean CN view
+    cnFilter: false,        // mean-CN filter, applies to every plot
+    cnMin: 0,
+    cnMax: 4,
   };
 
   componentDidMount() {
@@ -62,18 +67,18 @@ class CardinalityPanel extends Component {
   }
 
   componentWillUnmount() {
-    this.cancelSource?.cancel();
+    this.fetchToken = null;
   }
 
   fetchData = async () => {
     const path = this.props.dataset?.cardinalityPath;
-    this.cancelSource?.cancel();
+    const token = (this.fetchToken = {});
     if (!path) return;
-    this.cancelSource = axios.CancelToken.source();
     this.setState({ loading: true, error: null });
     try {
-      const { data } = await axios.get(path, { cancelToken: this.cancelSource.token });
-      const rows = (data.rows || []).filter((row) => row.pair && row.event);
+      const data = await fetchCardinalityData(path);
+      if (this.fetchToken !== token) return;
+      const rows = data.rows;
       const events = [...new Set(rows.map((row) => row.event))];
       this.setState({
         loading: false,
@@ -81,10 +86,11 @@ class CardinalityPanel extends Component {
         events: EVENT_ORDER.filter((e) => events.includes(e)).concat(
           events.filter((e) => !EVENT_ORDER.includes(e)).sort()
         ),
+        cnEvent: events.includes("chromothripsis") ? "chromothripsis" : ALL_EVENTS,
         generated: data.generated,
       });
     } catch (error) {
-      if (axios.isCancel(error)) return;
+      if (this.fetchToken !== token) return;
       this.setState({ loading: false, error: `Could not load ${path}` });
     }
   };
@@ -99,22 +105,27 @@ class CardinalityPanel extends Component {
     if (!url) return;
     if (row.location) url.searchParams.set("location", row.location);
     url.searchParams.set("tab", "2"); // Genome View
-    if (event.metaKey || event.ctrlKey) {
-      const newWindow = window.open(url.toString(), "_blank", "noopener,noreferrer");
-      if (newWindow) newWindow.opener = null;
-    } else {
-      // full load so the bookmarked location is applied when the case opens
-      window.location.assign(url.toString());
-    }
+    // new tab (full load, so the bookmarked location is applied when the case opens)
+    window.open(url.toString(), "_blank", "noopener,noreferrer");
   };
 
   hover = (row, point) => this.setState({ hovered: row ? { row, ...point } : null });
 
   // rows on pairs whose HMF het pileups are the shared placeholder file can be hidden
-  visibleRows = () =>
+  placeholderRows = () =>
     this.state.hidePlaceholder
       ? this.state.rows.filter((row) => !row.het_placeholder)
       : this.state.rows;
+
+  // mean-CN filter (events with no mean CN drop out while it is on); feeds all plots
+  inCnRange = (row) => {
+    const { cnFilter, cnMin, cnMax } = this.state;
+    if (!cnFilter) return true;
+    const cn = row.mean_cn;
+    return Number.isFinite(cn) && (cnMin == null || cn >= cnMin) && (cnMax == null || cn <= cnMax);
+  };
+
+  visibleRows = () => this.placeholderRows().filter(this.inCnRange);
 
   // placeholder-het pairs are drawn hollow
   renderDot = ({ row, cx, cy, color, highlighted, key }) => (
@@ -287,6 +298,65 @@ class CardinalityPanel extends Component {
     };
   };
 
+  // Chao (log y) vs width-weighted mean total CN of the event (linear x), one dot per phasing
+  renderMeanCn = (width) => {
+    const { cnEvent, hovered } = this.state;
+    const rows = this.visibleRows().filter((row) => cnEvent === ALL_EVENTS || row.event === cnEvent);
+    const innerW = width - MARGIN.left - MARGIN.right;
+    const innerH = PLOT_HEIGHT - MARGIN.top - MARGIN.bottom;
+    const withCn = rows.filter((row) => Number.isFinite(row.mean_cn));
+    const maxCn = d3.max(withCn, (row) => row.mean_cn) || 10;
+    const maxChao = d3.max(withCn, (row) => d3.max(PHASINGS, (p) => (isPositive(row[p.key]) ? row[p.key] : 0))) || 10;
+    const x = d3.scaleLinear().domain([0, maxCn]).range([0, innerW]).nice();
+    const y = d3.scaleLog().domain([1, maxChao]).range([innerH, 0]).nice().clamp(true);
+    const hoveredKey = hovered && rowKey(hovered.row);
+    const dots = [];
+    const top = [];
+    withCn.forEach((row) => {
+      PHASINGS.forEach((p) => {
+        if (!isPositive(row[p.key])) return;
+        const dot = {
+          row,
+          key: `${rowKey(row)}|${p.key}`,
+          cx: x(row.mean_cn),
+          cy: y(row[p.key]),
+          color: p.color,
+          highlighted: hoveredKey === rowKey(row),
+        };
+        (dot.highlighted ? top : dots).push(dot);
+      });
+    });
+    return {
+      count: withCn.length,
+      dropped: rows.length - withCn.length,
+      svg: (
+        <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
+          {this.renderLogAxis(y, "y", innerW, innerH)}
+          {x.ticks().map((t) => (
+            <g key={t}>
+              <line x1={x(t)} x2={x(t)} y1={0} y2={innerH} stroke="#ebebeb" />
+              <text x={x(t)} y={innerH + 18} textAnchor="middle" fontSize={11} fill="#4d4d4d">
+                {t}
+              </text>
+            </g>
+          ))}
+          <rect width={innerW} height={innerH} fill="none" stroke="#333" />
+          {dots.concat(top).map((dot) => this.renderDot(dot))}
+          <text x={innerW / 2} y={innerH + 44} textAnchor="middle" fontSize={13}>
+            Mean total copy number (width-weighted)
+          </text>
+          <text
+            transform={`translate(${-56},${innerH / 2}) rotate(-90)`}
+            textAnchor="middle"
+            fontSize={13}
+          >
+            Chao1 Estimate
+          </text>
+        </g>
+      ),
+    };
+  };
+
   renderTooltip = (width) => {
     const { hovered } = this.state;
     if (!hovered) return null;
@@ -311,7 +381,10 @@ class CardinalityPanel extends Component {
             <span style={{ color: p.color }}>●</span> {p.name} Chao: {fmt(row[p.key])}
           </div>
         ))}
-        <div>nodes: {fmt(row.n_nodes)} · {row.flag}</div>
+        <div>
+          mean CN: {Number.isFinite(row.mean_cn) ? d3.format(".2f")(row.mean_cn) : "NA"} · nodes:{" "}
+          {fmt(row.n_nodes)} · {row.flag}
+        </div>
         {row.het_placeholder && (
           <div className="cardinality-tooltip-warning">
             HMF het pileups for this pair are the shared placeholder file
@@ -325,7 +398,7 @@ class CardinalityPanel extends Component {
             ? "graphs: v2 allelic + unphased subgraphs"
             : "graphs: dataset default (no v2 subgraphs uploaded)"}
         </div>
-        <div className="cardinality-tooltip-hint">click to open · ctrl/⌘-click for new tab</div>
+        <div className="cardinality-tooltip-hint">click to open in a new tab</div>
       </div>
     );
   };
@@ -337,6 +410,11 @@ class CardinalityPanel extends Component {
       return <Empty description="No cardinality results configured for this dataset" />;
     }
     const isAll = event === ALL_EVENTS;
+    const isCn = event === MEAN_CN_VIEW;
+    // events in the current plot scope, before / after the mean-CN filter
+    const scopeEvent = isCn ? this.state.cnEvent : event;
+    const scope = this.placeholderRows().filter((row) => isAll || scopeEvent === ALL_EVENTS || row.event === scopeEvent);
+    const shown = scope.filter(this.inCnRange).length;
     return (
       <Card
         className="cardinality-panel"
@@ -348,11 +426,22 @@ class CardinalityPanel extends Component {
             style={{ width: 200 }}
             value={event}
             onChange={(value) => this.setState({ event: value, hovered: null })}
-            options={[{ value: ALL_EVENTS, label: "All events (by phasing)" }].concat(
-              events.map((e) => ({ value: e, label: e }))
-            )}
+            options={[
+              { value: ALL_EVENTS, label: "All events (by phasing)" },
+              { value: MEAN_CN_VIEW, label: "Chao vs mean CN (by phasing)" },
+            ].concat(events.map((e) => ({ value: e, label: e })))}
           />
-          {!isAll && (
+          {isCn && (
+            <Select
+              style={{ width: 160 }}
+              value={this.state.cnEvent}
+              onChange={(value) => this.setState({ cnEvent: value, hovered: null })}
+              options={[{ value: ALL_EVENTS, label: "All event types" }].concat(
+                events.map((e) => ({ value: e, label: e }))
+              )}
+            />
+          )}
+          {!isAll && !isCn && (
             <>
               <Text>x</Text>
               <Radio.Group
@@ -377,10 +466,42 @@ class CardinalityPanel extends Component {
             onChange={(e) => this.setState({ hidePlaceholder: e.target.checked, hovered: null })}
           >
             Hide placeholder-het pairs (
-            {(isAll ? rows : rows.filter((row) => row.event === event)).filter((row) => row.het_placeholder).length}
+            {(isAll || scopeEvent === ALL_EVENTS ? rows : rows.filter((row) => row.event === scopeEvent)).filter((row) => row.het_placeholder).length}
             , hollow)
           </Checkbox>
-          {isAll && (
+          <Space size="small">
+            <Switch
+              size="small"
+              checked={this.state.cnFilter}
+              onChange={(checked) => this.setState({ cnFilter: checked, hovered: null })}
+            />
+            <Text>Mean CN</Text>
+            <InputNumber
+              size="small"
+              style={{ width: 72 }}
+              min={0}
+              step={0.5}
+              placeholder="min"
+              value={this.state.cnMin}
+              disabled={!this.state.cnFilter}
+              onChange={(value) => this.setState({ cnMin: value, hovered: null })}
+            />
+            <Text>to</Text>
+            <InputNumber
+              size="small"
+              style={{ width: 72 }}
+              min={0}
+              step={0.5}
+              placeholder="max"
+              value={this.state.cnMax}
+              disabled={!this.state.cnFilter}
+              onChange={(value) => this.setState({ cnMax: value, hovered: null })}
+            />
+            <Text type="secondary">
+              {shown} of {scope.length} events shown
+            </Text>
+          </Space>
+          {(isAll || isCn) && (
             <Space size="middle">
               {PHASINGS.map((p) => (
                 <Text key={p.key}>
@@ -397,6 +518,8 @@ class CardinalityPanel extends Component {
               {({ width }) => {
                 const { svg, count, dropped } = isAll
                   ? this.renderStrip(width)
+                  : isCn
+                  ? this.renderMeanCn(width)
                   : this.renderScatter(width);
                 return (
                   <div style={{ position: "relative" }}>
@@ -405,8 +528,11 @@ class CardinalityPanel extends Component {
                     </svg>
                     {this.renderTooltip(width)}
                     <Text type="secondary">
-                      {count} {isAll ? "events" : "points"}
-                      {dropped > 0 && ` (${dropped} with NA or < 1 not shown)`}
+                      {count} {isAll || isCn ? "events" : "points"}
+                      {dropped > 0 &&
+                        (isCn
+                          ? ` (${dropped} without mean CN not shown)`
+                          : ` (${dropped} with NA or < 1 not shown)`)}
                     </Text>
                   </div>
                 );

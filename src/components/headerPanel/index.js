@@ -23,6 +23,8 @@ import {
 } from "../../helpers/utility";
 import { getNestedValue } from "../../helpers/metadata";
 import { datasetHasField } from "../../helpers/browseScope";
+import { fetchCardinalityData, eventsInView, formatChao } from "../../helpers/cardinality";
+import { domainsToLocation } from "../../helpers/utility";
 import { isMyeloSeqReportStyle } from "../../helpers/reportStyle";
 import { getRawPrimarySite } from "../../helpers/primarySite";
 import { buildPatientLevelViewUrl } from "../../helpers/patientLevelView";
@@ -61,8 +63,49 @@ export class HeaderPanel extends Component {
     this.state = {
       cbioportalModalVisible: false,
       clinicalTrialsModalVisible: false,
+      cardinalityRows: null,
     };
   }
+
+  componentDidMount() {
+    this.loadCardinality();
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.dataset?.cardinalityPath !== this.props.dataset?.cardinalityPath) {
+      this.loadCardinality();
+    }
+  }
+
+  componentWillUnmount() {
+    this.unmounted = true;
+  }
+
+  // Chao estimates of the cardinality json, for the header field
+  loadCardinality = () => {
+    const path = this.props.dataset?.cardinalityPath;
+    if (!path) {
+      this.setState({ cardinalityRows: null });
+      return;
+    }
+    fetchCardinalityData(path)
+      .then((data) => !this.unmounted && this.setState({ cardinalityRows: data.rows }))
+      .catch(() => !this.unmounted && this.setState({ cardinalityRows: null }));
+  };
+
+  // "totph/partph/unph" Chao of the event(s) in view, e.g. "4/1024/1024"; one event: just the numbers,
+  // several (view not event-specific): "event #id: ..." joined by "; "
+  chaoSummary = () => {
+    const { cardinalityRows } = this.state;
+    const { metadata, domains, chromoBins } = this.props;
+    if (!cardinalityRows || !metadata?.pair) return null;
+    const location = domains?.length && chromoBins ? domainsToLocation(chromoBins, domains) : "";
+    const events = eventsInView(cardinalityRows, metadata.pair, location);
+    if (!events.length) return null;
+    return events
+      .map((row) => (events.length > 1 ? `${row.event} #${row.ev_id}: ` : "") + formatChao(row))
+      .join("; ");
+  };
 
   handleCbioportalModalOpen = () => {
     this.setState({ cbioportalModalVisible: true });
@@ -359,6 +402,7 @@ export class HeaderPanel extends Component {
       datasetHasField(dataset, field === "msisensor.label" ? "msisensor.score" : field),
     );
     const hasPurityPloidy = datasetHasField(dataset, "purity") || datasetHasField(dataset, "ploidy");
+    const chaoSummary = this.chaoSummary();
 
     return (
       <Wrapper>
@@ -501,7 +545,7 @@ export class HeaderPanel extends Component {
                     </div>
                   </div>
                 </div>
-                {(summaryFields.length > 0 || hasPurityPloidy) && (
+                {(summaryFields.length > 0 || hasPurityPloidy || chaoSummary) && (
                 <div className="ant-pro-page-container-extraContent">
                   <div className="extra-content">
                     {summaryFields.map((d) => (
@@ -597,6 +641,23 @@ export class HeaderPanel extends Component {
                         </div>
                       </div>
                     )}
+
+                    {chaoSummary && (
+                      <div className="stat-item">
+                        <div className="ant-statistic">
+                          <div className="ant-statistic-title">
+                            {t("components.header-panel.chao-title")}
+                          </div>
+                          <div className="ant-statistic-content">
+                            <span className="ant-statistic-content-value">
+                              <span className="ant-statistic-content-value-int">
+                                {chaoSummary}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 )}
@@ -629,6 +690,8 @@ HeaderPanel.defaultProps = {
 const mapStateToProps = (state) => ({
   report: state.CaseReport.id,
   dataset: state.Settings.dataset,
+  domains: state.Settings.domains,
+  chromoBins: state.Settings.chromoBins,
   metadata: state.CaseReport.metadata,
   plots: state.PopulationStatistics.general,
   loading: state.FilteredEvents?.loading || false,

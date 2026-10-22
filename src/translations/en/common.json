@@ -531,6 +531,7 @@
       "copy-tooltip-failure": "Unable to copy",
       "copy-case-id-aria-label": "Copy case ID to clipboard",
       "purity-ploidy-title": "Purity/Ploidy",
+      "chao-title": "Chao (totph/partph/unph)",
       "metadata": {
         "pair": {
           "short": "Pair",
