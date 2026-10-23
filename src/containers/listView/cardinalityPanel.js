@@ -34,6 +34,17 @@ const CN_KEYS = {
   mean_cn_unw: { label: "Mean CN (unweighted)", axis: "Mean total copy number (unweighted, per node)" },
   max_cn: { label: "Max CN", axis: "Max total copy number (highest node)" },
 };
+// allelic LP (CPLEX) status of the pair's allelic graph: 101 optimal, 102 within tolerance,
+// 107 time limit (feasible, epgap = relative gap), 111 memory limit
+const LP_FILTERS = [
+  { value: "all", label: "All LP solves" },
+  { value: "noweak", label: "Exclude time limit gap > 0.5 / memory limit" },
+  { value: "optimal", label: "Optimal / within tolerance only" },
+];
+const lpLabel = (row) =>
+  row.lp_status == null
+    ? "NA"
+    : `${row.lp_status}${row.lp_status === 107 && Number.isFinite(row.lp_epgap) ? ` (gap ${d3.format(".2f")(row.lp_epgap)})` : ""}`;
 const CN_VIEWS = { [MEAN_CN_VIEW]: "mean_cn", [UNW_CN_VIEW]: "mean_cn_unw", [MAX_CN_VIEW]: "max_cn" };
 const MARGIN = { top: 24, right: 24, bottom: 56, left: 72 };
 const PLOT_HEIGHT = 520;
@@ -62,6 +73,7 @@ class CardinalityPanel extends Component {
     cnEvent: ALL_EVENTS,    // event shown in the Chao vs mean CN view
     cnFilter: false,        // CN filter, applies to every plot
     cnFilterKey: "mean_cn", // which CN summary the filter uses
+    lpFilter: "all",        // allelic LP solver-status QC filter, applies to every plot
     cnMin: 0,
     cnMax: 4,
   };
@@ -135,7 +147,16 @@ class CardinalityPanel extends Component {
     return Number.isFinite(cn) && (cnMin == null || cn >= cnMin) && (cnMax == null || cn <= cnMax);
   };
 
-  visibleRows = () => this.placeholderRows().filter(this.inCnRange);
+  // solver-status QC (rows without a status drop out unless "all")
+  passesLp = (row) => {
+    const { lpFilter } = this.state;
+    if (lpFilter === "all") return true;
+    const st = row.lp_status;
+    if (lpFilter === "optimal") return st === 101 || st === 102;
+    return st === 101 || st === 102 || (st === 107 && Number.isFinite(row.lp_epgap) && row.lp_epgap <= 0.5);
+  };
+
+  visibleRows = () => this.placeholderRows().filter((row) => this.inCnRange(row) && this.passesLp(row));
 
   // placeholder-het pairs are drawn hollow
   renderDot = ({ row, cx, cy, color, highlighted, key }) => (
@@ -397,6 +418,7 @@ class CardinalityPanel extends Component {
           {Number.isFinite(row.max_cn) ? d3.format(".2~f")(row.max_cn) : "NA"} · nodes:{" "}
           {fmt(row.n_nodes)} · {row.flag}
         </div>
+        <div>allelic LP status: {lpLabel(row)}</div>
         {row.het_placeholder && (
           <div className="cardinality-tooltip-warning">
             HMF het pileups for this pair are the shared placeholder file
@@ -427,7 +449,7 @@ class CardinalityPanel extends Component {
     // events in the current plot scope, before / after the CN filter
     const scopeEvent = isCn ? this.state.cnEvent : event;
     const scope = this.placeholderRows().filter((row) => isAll || scopeEvent === ALL_EVENTS || row.event === scopeEvent);
-    const shown = scope.filter(this.inCnRange).length;
+    const shown = scope.filter((row) => this.inCnRange(row) && this.passesLp(row)).length;
     return (
       <Card
         className="cardinality-panel"
@@ -484,6 +506,13 @@ class CardinalityPanel extends Component {
             {(isAll || scopeEvent === ALL_EVENTS ? rows : rows.filter((row) => row.event === scopeEvent)).filter((row) => row.het_placeholder).length}
             , hollow)
           </Checkbox>
+          <Select
+            size="small"
+            style={{ width: 290 }}
+            value={this.state.lpFilter}
+            onChange={(value) => this.setState({ lpFilter: value, hovered: null })}
+            options={LP_FILTERS}
+          />
           <Space size="small">
             <Switch
               size="small"
