@@ -26,6 +26,13 @@ const stripGroup = (event) =>
   ["qrppos", "qrpmin", "qrpmix"].includes(event) ? "rec dup" : event;
 const ALL_EVENTS = "__all__";
 const MEAN_CN_VIEW = "__meancn__";    // Chao vs mean copy number, all three phasings
+const MAX_CN_VIEW = "__maxcn__";      // Chao vs max copy number, all three phasings
+// copy-number summaries per event (export_cardinality_gos_meancn.R)
+const CN_KEYS = {
+  mean_cn: { label: "Mean CN", axis: "Mean total copy number (width-weighted)" },
+  max_cn: { label: "Max CN", axis: "Max total copy number (highest node)" },
+};
+const CN_VIEWS = { [MEAN_CN_VIEW]: "mean_cn", [MAX_CN_VIEW]: "max_cn" };
 const MARGIN = { top: 24, right: 24, bottom: 56, left: 72 };
 const PLOT_HEIGHT = 520;
 
@@ -51,7 +58,8 @@ class CardinalityPanel extends Component {
     hovered: null,
     hidePlaceholder: false,
     cnEvent: ALL_EVENTS,    // event shown in the Chao vs mean CN view
-    cnFilter: false,        // mean-CN filter, applies to every plot
+    cnFilter: false,        // CN filter, applies to every plot
+    cnFilterKey: "mean_cn", // which CN summary the filter uses
     cnMin: 0,
     cnMax: 4,
   };
@@ -117,11 +125,11 @@ class CardinalityPanel extends Component {
       ? this.state.rows.filter((row) => !row.het_placeholder)
       : this.state.rows;
 
-  // mean-CN filter (events with no mean CN drop out while it is on); feeds all plots
+  // CN filter on mean or max CN (events without that value drop out while it is on); feeds all plots
   inCnRange = (row) => {
-    const { cnFilter, cnMin, cnMax } = this.state;
+    const { cnFilter, cnFilterKey, cnMin, cnMax } = this.state;
     if (!cnFilter) return true;
-    const cn = row.mean_cn;
+    const cn = row[cnFilterKey];
     return Number.isFinite(cn) && (cnMin == null || cn >= cnMin) && (cnMax == null || cn <= cnMax);
   };
 
@@ -298,14 +306,14 @@ class CardinalityPanel extends Component {
     };
   };
 
-  // Chao (log y) vs width-weighted mean total CN of the event (linear x), one dot per phasing
-  renderMeanCn = (width) => {
+  // Chao (log y) vs the event's mean or max total CN (linear x), one dot per phasing
+  renderCn = (width, cnKey) => {
     const { cnEvent, hovered } = this.state;
     const rows = this.visibleRows().filter((row) => cnEvent === ALL_EVENTS || row.event === cnEvent);
     const innerW = width - MARGIN.left - MARGIN.right;
     const innerH = PLOT_HEIGHT - MARGIN.top - MARGIN.bottom;
-    const withCn = rows.filter((row) => Number.isFinite(row.mean_cn));
-    const maxCn = d3.max(withCn, (row) => row.mean_cn) || 10;
+    const withCn = rows.filter((row) => Number.isFinite(row[cnKey]));
+    const maxCn = d3.max(withCn, (row) => row[cnKey]) || 10;
     const maxChao = d3.max(withCn, (row) => d3.max(PHASINGS, (p) => (isPositive(row[p.key]) ? row[p.key] : 0))) || 10;
     const x = d3.scaleLinear().domain([0, maxCn]).range([0, innerW]).nice();
     const y = d3.scaleLog().domain([1, maxChao]).range([innerH, 0]).nice().clamp(true);
@@ -318,7 +326,7 @@ class CardinalityPanel extends Component {
         const dot = {
           row,
           key: `${rowKey(row)}|${p.key}`,
-          cx: x(row.mean_cn),
+          cx: x(row[cnKey]),
           cy: y(row[p.key]),
           color: p.color,
           highlighted: hoveredKey === rowKey(row),
@@ -343,7 +351,7 @@ class CardinalityPanel extends Component {
           <rect width={innerW} height={innerH} fill="none" stroke="#333" />
           {dots.concat(top).map((dot) => this.renderDot(dot))}
           <text x={innerW / 2} y={innerH + 44} textAnchor="middle" fontSize={13}>
-            Mean total copy number (width-weighted)
+            {CN_KEYS[cnKey].axis}
           </text>
           <text
             transform={`translate(${-56},${innerH / 2}) rotate(-90)`}
@@ -382,7 +390,8 @@ class CardinalityPanel extends Component {
           </div>
         ))}
         <div>
-          mean CN: {Number.isFinite(row.mean_cn) ? d3.format(".2f")(row.mean_cn) : "NA"} · nodes:{" "}
+          mean CN: {Number.isFinite(row.mean_cn) ? d3.format(".2f")(row.mean_cn) : "NA"} · max CN:{" "}
+          {Number.isFinite(row.max_cn) ? d3.format(".2~f")(row.max_cn) : "NA"} · nodes:{" "}
           {fmt(row.n_nodes)} · {row.flag}
         </div>
         {row.het_placeholder && (
@@ -410,8 +419,9 @@ class CardinalityPanel extends Component {
       return <Empty description="No cardinality results configured for this dataset" />;
     }
     const isAll = event === ALL_EVENTS;
-    const isCn = event === MEAN_CN_VIEW;
-    // events in the current plot scope, before / after the mean-CN filter
+    const cnView = CN_VIEWS[event];
+    const isCn = Boolean(cnView);
+    // events in the current plot scope, before / after the CN filter
     const scopeEvent = isCn ? this.state.cnEvent : event;
     const scope = this.placeholderRows().filter((row) => isAll || scopeEvent === ALL_EVENTS || row.event === scopeEvent);
     const shown = scope.filter(this.inCnRange).length;
@@ -429,6 +439,7 @@ class CardinalityPanel extends Component {
             options={[
               { value: ALL_EVENTS, label: "All events (by phasing)" },
               { value: MEAN_CN_VIEW, label: "Chao vs mean CN (by phasing)" },
+              { value: MAX_CN_VIEW, label: "Chao vs max CN (by phasing)" },
             ].concat(events.map((e) => ({ value: e, label: e })))}
           />
           {isCn && (
@@ -475,7 +486,13 @@ class CardinalityPanel extends Component {
               checked={this.state.cnFilter}
               onChange={(checked) => this.setState({ cnFilter: checked, hovered: null })}
             />
-            <Text>Mean CN</Text>
+            <Select
+              size="small"
+              style={{ width: 96 }}
+              value={this.state.cnFilterKey}
+              onChange={(value) => this.setState({ cnFilterKey: value, hovered: null })}
+              options={Object.entries(CN_KEYS).map(([value, k]) => ({ value, label: k.label }))}
+            />
             <InputNumber
               size="small"
               style={{ width: 72 }}
@@ -525,7 +542,7 @@ class CardinalityPanel extends Component {
                 const { svg, count, dropped } = isAll
                   ? this.renderStrip(width)
                   : isCn
-                  ? this.renderMeanCn(width)
+                  ? this.renderCn(width, cnView)
                   : this.renderScatter(width);
                 return (
                   <div style={{ position: "relative" }}>
@@ -537,7 +554,7 @@ class CardinalityPanel extends Component {
                       {count} {isAll || isCn ? "events" : "points"}
                       {dropped > 0 &&
                         (isCn
-                          ? ` (${dropped} without mean CN not shown)`
+                          ? ` (${dropped} without ${CN_KEYS[cnView].label} not shown)`
                           : ` (${dropped} with NA or < 1 not shown)`)}
                     </Text>
                   </div>
