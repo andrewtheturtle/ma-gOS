@@ -27,12 +27,14 @@ const stripGroup = (event) =>
 const ALL_EVENTS = "__all__";
 const MEAN_CN_VIEW = "__meancn__";    // Chao vs mean copy number, all three phasings
 const MAX_CN_VIEW = "__maxcn__";      // Chao vs max copy number, all three phasings
+const UNW_CN_VIEW = "__meancnunw__";  // Chao vs unweighted (per-node) mean copy number
 // copy-number summaries per event (export_cardinality_gos_meancn.R)
 const CN_KEYS = {
   mean_cn: { label: "Mean CN", axis: "Mean total copy number (width-weighted)" },
+  mean_cn_unw: { label: "Mean CN (unweighted)", axis: "Mean total copy number (unweighted, per node)" },
   max_cn: { label: "Max CN", axis: "Max total copy number (highest node)" },
 };
-const CN_VIEWS = { [MEAN_CN_VIEW]: "mean_cn", [MAX_CN_VIEW]: "max_cn" };
+const CN_VIEWS = { [MEAN_CN_VIEW]: "mean_cn", [UNW_CN_VIEW]: "mean_cn_unw", [MAX_CN_VIEW]: "max_cn" };
 const MARGIN = { top: 24, right: 24, bottom: 56, left: 72 };
 const PLOT_HEIGHT = 520;
 
@@ -390,7 +392,8 @@ class CardinalityPanel extends Component {
           </div>
         ))}
         <div>
-          mean CN: {Number.isFinite(row.mean_cn) ? d3.format(".2f")(row.mean_cn) : "NA"} · max CN:{" "}
+          mean CN: {Number.isFinite(row.mean_cn) ? d3.format(".2f")(row.mean_cn) : "NA"} · unweighted:{" "}
+          {Number.isFinite(row.mean_cn_unw) ? d3.format(".2f")(row.mean_cn_unw) : "NA"} · max CN:{" "}
           {Number.isFinite(row.max_cn) ? d3.format(".2~f")(row.max_cn) : "NA"} · nodes:{" "}
           {fmt(row.n_nodes)} · {row.flag}
         </div>
@@ -433,12 +436,13 @@ class CardinalityPanel extends Component {
       >
         <Space wrap style={{ marginBottom: 16 }}>
           <Select
-            style={{ width: 200 }}
+            style={{ width: 290 }}
             value={event}
             onChange={(value) => this.setState({ event: value, hovered: null })}
             options={[
               { value: ALL_EVENTS, label: "All events (by phasing)" },
               { value: MEAN_CN_VIEW, label: "Chao vs mean CN (by phasing)" },
+              { value: UNW_CN_VIEW, label: "Chao vs unweighted mean CN (by phasing)" },
               { value: MAX_CN_VIEW, label: "Chao vs max CN (by phasing)" },
             ].concat(events.map((e) => ({ value: e, label: e })))}
           />
@@ -488,7 +492,7 @@ class CardinalityPanel extends Component {
             />
             <Select
               size="small"
-              style={{ width: 96 }}
+              style={{ width: 172 }}
               value={this.state.cnFilterKey}
               onChange={(value) => this.setState({ cnFilterKey: value, hovered: null })}
               options={Object.entries(CN_KEYS).map(([value, k]) => ({ value, label: k.label }))}
