@@ -59,6 +59,7 @@ const jitter = (key) => {
   return ((h >>> 0) % 1000) / 1000 - 0.5;
 };
 const fmt = (v) => (Number.isFinite(v) ? d3.format(",.0f")(v) : "NA");
+const LOW_CN = 2; // low-ploidy reference line on the Chao vs CN views (max CN <= 2)
 
 class CardinalityPanel extends Component {
   state = {
@@ -72,10 +73,10 @@ class CardinalityPanel extends Component {
     hidePlaceholder: false,
     cnEvent: ALL_EVENTS,    // event shown in the Chao vs mean CN view
     cnFilter: false,        // CN filter, applies to every plot
-    cnFilterKey: "mean_cn", // which CN summary the filter uses
+    cnFilterKey: "max_cn",  // which CN summary the filter uses
     lpFilter: "all",        // allelic LP solver-status QC filter, applies to every plot
     cnMin: 0,
-    cnMax: 4,
+    cnMax: 2,               // low ploidy: max CN <= 2
   };
 
   componentDidMount() {
@@ -372,6 +373,14 @@ class CardinalityPanel extends Component {
             </g>
           ))}
           <rect width={innerW} height={innerH} fill="none" stroke="#333" />
+          {LOW_CN <= x.domain()[1] && (
+            <g>
+              <line x1={x(LOW_CN)} x2={x(LOW_CN)} y1={0} y2={innerH} stroke="#333" strokeDasharray="2 3" />
+              <text x={x(LOW_CN) + 4} y={12} fontSize={11} fill="#4d4d4d">
+                CN {LOW_CN}
+              </text>
+            </g>
+          )}
           {dots.concat(top).map((dot) => this.renderDot(dot))}
           <text x={innerW / 2} y={innerH + 44} textAnchor="middle" fontSize={13}>
             {CN_KEYS[cnKey].axis}
@@ -415,7 +424,8 @@ class CardinalityPanel extends Component {
         <div>
           mean CN: {Number.isFinite(row.mean_cn) ? d3.format(".2f")(row.mean_cn) : "NA"} · unweighted:{" "}
           {Number.isFinite(row.mean_cn_unw) ? d3.format(".2f")(row.mean_cn_unw) : "NA"} · max CN:{" "}
-          {Number.isFinite(row.max_cn) ? d3.format(".2~f")(row.max_cn) : "NA"} · nodes:{" "}
+          {Number.isFinite(row.max_cn) ? d3.format(".2~f")(row.max_cn) : "NA"} · max allele CN:{" "}
+          {Number.isFinite(row.max_allele_cn) ? d3.format(".2~f")(row.max_allele_cn) : "NA"} · nodes:{" "}
           {fmt(row.n_nodes)} · {row.flag}
         </div>
         <div>allelic LP status: {lpLabel(row)}</div>
